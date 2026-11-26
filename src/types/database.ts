@@ -114,6 +114,15 @@ export interface Claim {
   context?: string | null;
   search_queries?: string[];
   metadata?: Record<string, unknown>;
+  ai_verdict?: string | null;
+  ai_confidence?: number | null;
+  ai_explanation?: string | null;
+  ai_reasoning?: string | null;
+  ai_structured_result?: Record<string, unknown> | null;
+  verified_at?: string | null;
+  human_verdict?: string | null;
+  human_explanation?: string | null;
+  human_reviewer_id?: string | null;
 }
 
 export interface Evidence {
@@ -149,6 +158,10 @@ export interface Report {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  findings?: unknown[] | null;
+  overall_stats?: Record<string, unknown> | null;
+  limitations?: string[] | null;
+  ai_model?: string | null;
 }
 
 export interface Review {

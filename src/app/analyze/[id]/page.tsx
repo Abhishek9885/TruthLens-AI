@@ -27,6 +27,8 @@ import {
   ChevronDown,
   ChevronUp,
   Scale,
+  ShieldAlert,
+  FileCheck2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +46,11 @@ import type {
   RetrieveEvidenceApiResponse,
   EvidenceType,
 } from "@/types/evidence";
+import type {
+  VerifyApiResponse,
+  VerificationVerdict,
+  ClaimVerificationResult,
+} from "@/types/verification";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -60,11 +67,17 @@ function AnalyzeContent({ params }: PageProps) {
   const [copiedQuery, setCopiedQuery] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
-  // Day 4: Evidence Discovery & Retrieval state
+  // Evidence Discovery & Retrieval state
   const [evidenceData, setEvidenceData] = useState<RetrieveEvidenceApiResponse | null>(null);
   const [retrievingEvidence, setRetrievingEvidence] = useState(false);
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const [expandedEvidence, setExpandedEvidence] = useState<Record<string, boolean>>({});
+
+  // Verification Reasoning & Synthesis state
+  const [verificationData, setVerificationData] = useState<VerifyApiResponse | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [expandedClaimReport, setExpandedClaimReport] = useState<Record<string, boolean>>({});
 
   const handleTriggerAnalysis = async () => {
     setAnalyzing(true);
@@ -120,6 +133,36 @@ function AnalyzeContent({ params }: PageProps) {
     }
   };
 
+  const handleRunVerification = async (forceReverify = false) => {
+    setVerifying(true);
+    setVerifyError(null);
+    try {
+      const res = await fetch("/api/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ submissionId: id, forceReverify }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Verification synthesis failed.");
+      }
+      setVerificationData(data);
+
+      // Refresh submission metadata
+      const subRes = await fetch(`/api/analyze?submissionId=${id}`);
+      const subData = await subRes.json();
+      if (subRes.ok && subData.submission) {
+        setSubmission(subData.submission);
+      }
+    } catch (err) {
+      setVerifyError(
+        err instanceof Error ? err.message : "Verification request failed."
+      );
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   useEffect(() => {
     let ignore = false;
 
@@ -147,6 +190,17 @@ function AnalyzeContent({ params }: PageProps) {
           }
         } catch {
           // ignore background evidence fetch error
+        }
+
+        // Fetch saved verification results if already generated
+        try {
+          const verRes = await fetch(`/api/verify?submissionId=${id}`);
+          const verData = await verRes.json();
+          if (!ignore && verRes.ok && verData.success && verData.report) {
+            setVerificationData(verData);
+          }
+        } catch {
+          // ignore background verification fetch error
         }
       } catch (err) {
         if (!ignore) {
@@ -244,6 +298,47 @@ function AnalyzeContent({ params }: PageProps) {
         return (
           <Badge className="bg-muted text-muted-foreground border-border">
             Unclassified
+          </Badge>
+        );
+    }
+  };
+
+  const getVerdictBadge = (verdict: VerificationVerdict | string) => {
+    switch (verdict?.toLowerCase()) {
+      case "verified":
+        return (
+          <Badge className="bg-success/15 text-success border-success/30 font-semibold px-2.5 py-0.5 text-xs">
+            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+            Verified
+          </Badge>
+        );
+      case "false":
+        return (
+          <Badge className="bg-danger/15 text-danger border-danger/30 font-semibold px-2.5 py-0.5 text-xs">
+            <XCircle className="h-3.5 w-3.5 mr-1" />
+            False
+          </Badge>
+        );
+      case "misleading":
+        return (
+          <Badge className="bg-warning/15 text-warning border-warning/30 font-semibold px-2.5 py-0.5 text-xs">
+            <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+            Misleading
+          </Badge>
+        );
+      case "partially_true":
+        return (
+          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 font-semibold px-2.5 py-0.5 text-xs">
+            <Scale className="h-3.5 w-3.5 mr-1" />
+            Partially True
+          </Badge>
+        );
+      case "unverified":
+      default:
+        return (
+          <Badge className="bg-muted text-muted-foreground border-border font-semibold px-2.5 py-0.5 text-xs">
+            <HelpCircle className="h-3.5 w-3.5 mr-1" />
+            Unverified
           </Badge>
         );
     }
@@ -1021,7 +1116,7 @@ function AnalyzeContent({ params }: PageProps) {
                       </div>
                       <div className="rounded bg-navy-950/60 p-2.5 border border-border/40">
                         <p className="font-semibold text-foreground/90">3. AI Verification Synthesis (Day 5)</p>
-                        <p className="text-[11px] mt-0.5">Future multi-evidence synthesis model that aggregates all evidence to compute probability and explanations.</p>
+                        <p className="text-[11px] mt-0.5">Multi-evidence synthesis model that aggregates all evidence to compute probability, calibrated confidence, and transparent explanations.</p>
                       </div>
                       <div className="rounded bg-navy-950/60 p-2.5 border border-border/40">
                         <p className="font-semibold text-foreground/90">4. Human Editorial Verdict</p>
@@ -1031,7 +1126,472 @@ function AnalyzeContent({ params }: PageProps) {
                   </div>
                 </div>
 
-                {/* 4. Overall Engine Assessment Card */}
+                {/* 4. AI Verification Reasoning & Preliminary Assessment (Day 5) */}
+                <div className="space-y-4 pt-4 border-t border-border/40">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <FileCheck2 className="h-5 w-5 text-blue-accent" />
+                        <h2 className="text-xl font-bold tracking-tight text-foreground">
+                          AI Verification Reasoning &amp; Synthesis
+                        </h2>
+                        <Badge className="bg-blue-accent/15 text-blue-accent border-blue-accent/30 text-xs font-mono">
+                          Gemini 2.5 Flash
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Evidence-grounded multi-source reasoning, contradictory citation audit, and preliminary verdict generation.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        size="sm"
+                        disabled={verifying}
+                        onClick={() => handleRunVerification(Boolean(verificationData))}
+                        className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium shadow-sm"
+                      >
+                        {verifying ? (
+                          <>
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            <span>Synthesizing Reasoning…</span>
+                          </>
+                        ) : verificationData ? (
+                          <>
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            <span>Re-Run Verification</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-3.5 w-3.5" />
+                            <span>Run AI Verification</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Mandatory Human Review Pending Notice Banner */}
+                  <div className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-xs text-foreground flex items-start gap-3">
+                    <ShieldAlert className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-warning text-sm">
+                          AI-Generated Preliminary Assessment. Pending Human Review.
+                        </span>
+                        <Badge variant="outline" className="text-[10px] uppercase border-warning/40 text-warning">
+                          Advisory Only
+                        </Badge>
+                      </div>
+                      <p className="text-muted-foreground leading-relaxed">
+                        Verdicts, confidence scores, and reasoning summaries are computed by the Gemini verification engine grounded strictly in retrieved fact-checks and documentary evidence. To prevent unverified censorship or bias, these assessments remain preliminary until certified by human editorial review.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Verification Error Banner */}
+                  {verifyError && (
+                    <div className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger flex items-start gap-3">
+                      <XCircle className="h-5 w-5 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="font-semibold">Verification Engine Notice</p>
+                        <p className="text-danger/90">{verifyError}</p>
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() => handleRunVerification(true)}
+                          className="mt-2 text-xs border-danger/40 hover:bg-danger/20"
+                        >
+                          Retry Verification Synthesis
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Verifying In Progress State */}
+                  {verifying && (
+                    <Card className="bg-navy-900/60 border-blue-accent/40 text-center py-12 px-4 space-y-3">
+                      <RefreshCw className="h-8 w-8 animate-spin text-blue-accent mx-auto" />
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-foreground">
+                          Synthesizing Evidence &amp; Generating Grounded Verdicts…
+                        </p>
+                        <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                          Evaluating evidence independence, clustering wire syndication, comparing supporting vs contradicting fact-checks, and constructing auditable citations.
+                        </p>
+                      </div>
+                    </Card>
+                  )}
+
+                  {/* Verification Summary Counts Bar */}
+                  {verificationData && !verifying && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5">
+                        <div className="rounded-lg border border-border/50 bg-navy-900/60 p-3 space-y-1">
+                          <span className="text-[11px] uppercase tracking-wider text-muted-foreground block font-mono">
+                            Total Evaluated
+                          </span>
+                          <span className="text-xl font-bold text-foreground">
+                            {verificationData.report.totalClaims}
+                          </span>
+                        </div>
+                        <div className="rounded-lg border border-success/30 bg-success/5 p-3 space-y-1">
+                          <span className="text-[11px] uppercase tracking-wider text-success/80 block font-mono">
+                            Verified
+                          </span>
+                          <span className="text-xl font-bold text-success">
+                            {verificationData.report.counts.verified}
+                          </span>
+                        </div>
+                        <div className="rounded-lg border border-danger/30 bg-danger/5 p-3 space-y-1">
+                          <span className="text-[11px] uppercase tracking-wider text-danger/80 block font-mono">
+                            False
+                          </span>
+                          <span className="text-xl font-bold text-danger">
+                            {verificationData.report.counts.false}
+                          </span>
+                        </div>
+                        <div className="rounded-lg border border-warning/30 bg-warning/5 p-3 space-y-1">
+                          <span className="text-[11px] uppercase tracking-wider text-warning/80 block font-mono">
+                            Misleading
+                          </span>
+                          <span className="text-xl font-bold text-warning">
+                            {verificationData.report.counts.misleading}
+                          </span>
+                        </div>
+                        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-1">
+                          <span className="text-[11px] uppercase tracking-wider text-amber-400/80 block font-mono">
+                            Partially True
+                          </span>
+                          <span className="text-xl font-bold text-amber-400">
+                            {verificationData.report.counts.partially_true}
+                          </span>
+                        </div>
+                        <div className="rounded-lg border border-border/50 bg-navy-900/60 p-3 space-y-1">
+                          <span className="text-[11px] uppercase tracking-wider text-muted-foreground block font-mono">
+                            Unverified
+                          </span>
+                          <span className="text-xl font-bold text-muted-foreground">
+                            {verificationData.report.counts.unverified}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Overall Synthesis Box */}
+                      {verificationData.report.overallSynthesis && (
+                        <div className="rounded-lg bg-navy-900/70 border border-border/60 p-4 space-y-1.5">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span className="font-semibold uppercase tracking-wider font-mono text-foreground/90">
+                              Executive Verification Synthesis
+                            </span>
+                            <span className="font-mono text-[11px]">
+                              Generated: {new Date(verificationData.report.verifiedAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <p className="text-xs text-foreground/90 leading-relaxed">
+                            {verificationData.report.overallSynthesis}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-3 pt-2 text-[11px] text-muted-foreground border-t border-border/30">
+                            <span>
+                              <strong>Model:</strong> {verificationData.report.modelUsed}
+                            </span>
+                            <span>•</span>
+                            <span>
+                              <strong>Methodology:</strong> {verificationData.report.methodology}
+                            </span>
+                            {verificationData.cached && (
+                              <>
+                                <span>•</span>
+                                <Badge variant="outline" className="text-[10px] font-mono py-0">
+                                  Cached Assessment
+                                </Badge>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Empty state: Not yet verified */}
+                  {!verificationData && !verifying && (
+                    <Card className="bg-navy-900/40 border-border/60 text-center py-10 px-4">
+                      <CardHeader className="space-y-2">
+                        <div className="h-12 w-12 rounded-xl bg-blue-accent/10 border border-blue-accent/30 text-blue-accent mx-auto flex items-center justify-center">
+                          <Scale className="h-6 w-6" />
+                        </div>
+                        <CardTitle className="text-lg">AI Verification Synthesis Ready</CardTitle>
+                        <CardDescription className="max-w-md mx-auto text-xs text-muted-foreground">
+                          Synthesize retrieved fact-checks, examine source independence, audit contradictory evidence, and generate transparent preliminary verdicts for each claim.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <Button
+                          size="sm"
+                          onClick={() => handleRunVerification(false)}
+                          className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium"
+                        >
+                          <Sparkles className="h-3.5 w-3.5" />
+                          <span>Generate Verification Synthesis</span>
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Claim-by-Claim Verification Assessment Cards */}
+                  {verificationData && !verifying && (
+                    <div className="space-y-4">
+                      {verificationData.report.claimVerifications.map((item: ClaimVerificationResult, vIdx: number) => {
+                        const matchingClaim = analysis?.claims.find((c) => c.id === item.claimId) || analysis?.claims[vIdx];
+                        const isExpanded = Boolean(expandedClaimReport[item.claimId || `claim-${vIdx}`]);
+                        const toggleExpand = () => {
+                          const k = item.claimId || `claim-${vIdx}`;
+                          setExpandedClaimReport((prev) => ({ ...prev, [k]: !prev[k] }));
+                        };
+
+                        return (
+                          <Card
+                            key={item.claimId || vIdx}
+                            className="bg-navy-900/70 border-border/60 overflow-hidden space-y-0"
+                          >
+                            <CardHeader className="pb-3 border-b border-border/40 space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-xs text-blue-accent font-semibold">
+                                    Claim #{vIdx + 1}
+                                  </span>
+                                  {matchingClaim?.category && (
+                                    <Badge variant="outline" className="text-[11px] border-border/70">
+                                      {matchingClaim.category}
+                                    </Badge>
+                                  )}
+                                  {getVerdictBadge(item.verdict)}
+                                </div>
+
+                                {/* Confidence Score Meter */}
+                                <div className="flex items-center gap-2 text-xs">
+                                  <span className="text-muted-foreground text-[11px]">Model Confidence:</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-16 h-2 rounded-full bg-navy-950 overflow-hidden border border-border/60">
+                                      <div
+                                        className={`h-full rounded-full ${
+                                          item.confidence >= 75
+                                            ? "bg-success"
+                                            : item.confidence >= 45
+                                            ? "bg-warning"
+                                            : "bg-muted-foreground"
+                                        }`}
+                                        style={{ width: `${Math.max(item.confidence, 5)}%` }}
+                                      />
+                                    </div>
+                                    <span className="font-mono font-semibold text-foreground text-xs">
+                                      {item.confidence}%
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Claim Text */}
+                              <div className="space-y-1 pt-1">
+                                <h3 className="text-base font-semibold text-foreground leading-snug">
+                                  {matchingClaim?.normalizedText || `Claim ${vIdx + 1}`}
+                                </h3>
+                                {matchingClaim?.originalText && matchingClaim.originalText !== matchingClaim.normalizedText && (
+                                  <p className="text-xs text-muted-foreground italic">
+                                    &ldquo;{matchingClaim.originalText}&rdquo;
+                                  </p>
+                                )}
+                              </div>
+                            </CardHeader>
+
+                            <CardContent className="pt-4 space-y-4 text-xs">
+                              {/* Primary Assessment Explanation */}
+                              <div className="rounded-lg bg-navy-950/70 border border-border/40 p-3.5 space-y-1.5">
+                                <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-mono block font-semibold">
+                                  AI Verification Assessment
+                                </span>
+                                <p className="text-foreground/95 leading-relaxed text-xs">
+                                  {item.explanation}
+                                </p>
+                              </div>
+
+                              {/* Transparent Reasoning Summary */}
+                              {item.reasoningSummary && (
+                                <div className="p-3 rounded-lg bg-navy-950/40 border border-border/30 space-y-1">
+                                  <span className="text-[10px] uppercase tracking-wider text-blue-accent font-mono block font-semibold">
+                                    Reasoning Trail
+                                  </span>
+                                  <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                    {item.reasoningSummary}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Cited Evidence Cards */}
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-mono font-semibold">
+                                    Grounded Evidence Citations (
+                                    {item.supportingEvidence.length +
+                                      item.contradictingEvidence.length +
+                                      item.contextualEvidence.length}
+                                    )
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={toggleExpand}
+                                    className="text-blue-accent hover:underline text-[11px] inline-flex items-center gap-1"
+                                  >
+                                    <span>{isExpanded ? "Collapse Details" : "Expand Limitations &amp; Nuances"}</span>
+                                    {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                  </button>
+                                </div>
+
+                                {item.supportingEvidence.length === 0 &&
+                                item.contradictingEvidence.length === 0 &&
+                                item.contextualEvidence.length === 0 ? (
+                                  <div className="p-3 rounded-lg border border-dashed border-border/40 bg-navy-950/30 text-center text-muted-foreground text-[11px]">
+                                    No direct fact-check registry articles were cited for this claim. Assessment is based on verifiable claim taxonomy and lack of corroborating evidence.
+                                  </div>
+                                ) : (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                                    {/* Supporting Citations */}
+                                    {item.supportingEvidence.map((cit, cIdx) => (
+                                      <div
+                                        key={`sup-${cIdx}`}
+                                        className="p-2.5 rounded-lg border border-success/30 bg-success/5 space-y-1"
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <Badge className="bg-success/15 text-success border-success/30 text-[10px]">
+                                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                                            Supporting
+                                          </Badge>
+                                          <span className="font-semibold text-foreground text-[11px] truncate">
+                                            {cit.sourceName || "Verified Source"}
+                                          </span>
+                                        </div>
+                                        <p className="text-muted-foreground text-[11px] leading-snug">
+                                          {cit.relevanceExplanation}
+                                        </p>
+                                        <a
+                                          href={cit.sourceUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-[11px] text-blue-accent hover:underline inline-flex items-center gap-1 pt-0.5 break-all"
+                                        >
+                                          <span>View Reference Article</span>
+                                          <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                                        </a>
+                                      </div>
+                                    ))}
+
+                                    {/* Contradicting Citations */}
+                                    {item.contradictingEvidence.map((cit, cIdx) => (
+                                      <div
+                                        key={`con-${cIdx}`}
+                                        className="p-2.5 rounded-lg border border-danger/30 bg-danger/5 space-y-1"
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <Badge className="bg-danger/15 text-danger border-danger/30 text-[10px]">
+                                            <XCircle className="h-3 w-3 mr-1" />
+                                            Contradicting / Refuting
+                                          </Badge>
+                                          <span className="font-semibold text-foreground text-[11px] truncate">
+                                            {cit.sourceName || "Fact-Check Publisher"}
+                                          </span>
+                                        </div>
+                                        <p className="text-muted-foreground text-[11px] leading-snug">
+                                          {cit.relevanceExplanation}
+                                        </p>
+                                        <a
+                                          href={cit.sourceUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-[11px] text-blue-accent hover:underline inline-flex items-center gap-1 pt-0.5 break-all"
+                                        >
+                                          <span>View Refuting Article</span>
+                                          <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                                        </a>
+                                      </div>
+                                    ))}
+
+                                    {/* Contextual Citations */}
+                                    {item.contextualEvidence.map((cit, cIdx) => (
+                                      <div
+                                        key={`ctx-${cIdx}`}
+                                        className="p-2.5 rounded-lg border border-blue-accent/30 bg-blue-accent/5 space-y-1"
+                                      >
+                                        <div className="flex items-center justify-between gap-2">
+                                          <Badge className="bg-blue-accent/15 text-blue-accent border-blue-accent/30 text-[10px]">
+                                            <Info className="h-3 w-3 mr-1" />
+                                            Contextual Reference
+                                          </Badge>
+                                          <span className="font-semibold text-foreground text-[11px] truncate">
+                                            {cit.sourceName || "Background Report"}
+                                          </span>
+                                        </div>
+                                        <p className="text-muted-foreground text-[11px] leading-snug">
+                                          {cit.relevanceExplanation}
+                                        </p>
+                                        <a
+                                          href={cit.sourceUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-[11px] text-blue-accent hover:underline inline-flex items-center gap-1 pt-0.5 break-all"
+                                        >
+                                          <span>View Background Source</span>
+                                          <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                                        </a>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Expandable Technical Details: Limitations & Missing Information */}
+                              {isExpanded && (
+                                <div className="pt-2 border-t border-border/30 space-y-3 font-mono text-[11px]">
+                                  {item.limitations && item.limitations.length > 0 && (
+                                    <div className="p-2.5 rounded bg-black/20 border border-border/40 space-y-1">
+                                      <span className="text-warning font-semibold block">
+                                        Evidence Limitations &amp; Caveats:
+                                      </span>
+                                      <ul className="list-disc list-inside text-muted-foreground space-y-0.5 pl-1">
+                                        {item.limitations.map((lim, lIdx) => (
+                                          <li key={lIdx}>{lim}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+
+                                  {item.missingInformation && item.missingInformation.length > 0 && (
+                                    <div className="p-2.5 rounded bg-black/20 border border-border/40 space-y-1">
+                                      <span className="text-blue-accent font-semibold block">
+                                        Information Gaps / Missing Context:
+                                      </span>
+                                      <ul className="list-disc list-inside text-muted-foreground space-y-0.5 pl-1">
+                                        {item.missingInformation.map((gap, gIdx) => (
+                                          <li key={gIdx}>{gap}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+
+                                  <div className="text-[10px] text-muted-foreground pt-1 flex items-center justify-between">
+                                    <span>Claim UUID: {item.claimId}</span>
+                                    <span className="text-warning">Status: Pending Human Certification</span>
+                                  </div>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* 5. Overall Engine Assessment Card */}
                 <Card className="bg-navy-900/60 border-border/60">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
