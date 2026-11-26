@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -13,10 +14,12 @@ import {
   Settings,
   AlertTriangle,
   X,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import type { Profile } from "@/types/database";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -39,6 +42,22 @@ interface DashboardSidebarProps {
 
 export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
   const pathname = usePathname();
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data?.profile) {
+          setProfile(data.profile as Profile);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const sidebarContent = (
     <div className="flex flex-col h-full">
@@ -87,6 +106,28 @@ export function DashboardSidebar({ open, onClose }: DashboardSidebarProps) {
 
       {/* Secondary nav */}
       <div className="px-3 pb-4 space-y-1">
+        {/* Admin Navigation Section */}
+        {profile?.role === "admin" && (
+          <div className="pt-2">
+            <div className="px-3 pb-1.5 text-[10px] font-mono uppercase tracking-wider text-purple-400">
+              Admin Governance
+            </div>
+            <Link
+              href="/admin"
+              onClick={onClose}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors border",
+                pathname.startsWith("/admin")
+                  ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                  : "text-purple-300/80 hover:text-purple-200 hover:bg-purple-500/10 border-transparent"
+              )}
+            >
+              <ShieldCheck className="h-4.5 w-4.5 text-purple-400 shrink-0" />
+              <span>Admin Review Console</span>
+            </Link>
+          </div>
+        )}
+
         <Separator className="bg-border/50 mb-3" />
         {secondaryNavigation.map((item) => {
           const isActive = pathname === item.href;

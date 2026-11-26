@@ -52,6 +52,7 @@ interface SubmissionsListProps {
 const DECISION_LABELS: Record<ReviewDecision, string> = {
   approved: "Approved",
   flagged: "Flagged",
+  needs_evidence: "Needs Evidence",
   needs_more_evidence: "Needs Evidence",
   rejected: "Rejected",
 };

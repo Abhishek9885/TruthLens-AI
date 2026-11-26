@@ -1,269 +1,397 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Shield,
   Search,
-  BarChart3,
+  CheckCircle2,
   AlertTriangle,
-  CheckCircle,
-  Globe,
+  XCircle,
+  Scale,
   Clock,
   FilePlus2,
+  RefreshCw,
+  ExternalLink,
+  ArrowRight,
+  ShieldCheck,
+  ShieldAlert,
+  Info,
 } from "lucide-react";
 import { StatsCard } from "@/components/dashboard/stats-card";
 import { DashboardCard } from "@/components/dashboard/dashboard-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-
-const recentClaims = [
-  {
-    id: 1,
-    claim: "Voter registration deadline extended to November 15th",
-    source: "Social Media Post",
-    status: "verified" as const,
-    confidence: 94,
-    time: "2 min ago",
-  },
-  {
-    id: 2,
-    claim: "Polling stations will close early in District 7",
-    source: "News Article",
-    status: "false" as const,
-    confidence: 97,
-    time: "15 min ago",
-  },
-  {
-    id: 3,
-    claim: "New voter ID requirements for mail-in ballots",
-    source: "Government Press Release",
-    status: "verified" as const,
-    confidence: 99,
-    time: "32 min ago",
-  },
-  {
-    id: 4,
-    claim: "Electronic voting machines compromised in 3 states",
-    source: "Blog Post",
-    status: "false" as const,
-    confidence: 96,
-    time: "1 hr ago",
-  },
-  {
-    id: 5,
-    claim: "Absentee ballot counting procedures updated",
-    source: "Official Statement",
-    status: "pending" as const,
-    confidence: 72,
-    time: "2 hr ago",
-  },
-];
-
-function getStatusBadge(status: "verified" | "false" | "pending") {
-  switch (status) {
-    case "verified":
-      return (
-        <Badge className="bg-success/10 text-success border-success/30 hover:bg-success/20">
-          <CheckCircle className="h-3 w-3 mr-1" />
-          Verified
-        </Badge>
-      );
-    case "false":
-      return (
-        <Badge className="bg-danger/10 text-danger border-danger/30 hover:bg-danger/20">
-          <AlertTriangle className="h-3 w-3 mr-1" />
-          False
-        </Badge>
-      );
-    case "pending":
-      return (
-        <Badge className="bg-warning/10 text-warning border-warning/30 hover:bg-warning/20">
-          <Clock className="h-3 w-3 mr-1" />
-          Pending
-        </Badge>
-      );
-  }
-}
+import type { Submission } from "@/types/database";
+import type { Profile } from "@/types/database";
 
 export default function DashboardPage() {
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshIndex, setRefreshIndex] = useState(0);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function load() {
+      try {
+        // 1. Fetch current profile
+        const meRes = await fetch("/api/auth/me");
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          if (!ignore && meData?.profile) {
+            setProfile(meData.profile);
+          }
+        }
+
+        // 2. Fetch user's own submissions (scoped strictly to auth.uid() by server)
+        const res = await fetch("/api/submissions");
+        const json = await res.json();
+        if (!ignore) {
+          if (!res.ok) {
+            throw new Error(json.error || "Failed to load submissions.");
+          }
+          setSubmissions(json.submissions || []);
+        }
+      } catch (err) {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : "Failed to load dashboard data.");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+
+    load();
+
+    return () => {
+      ignore = true;
+    };
+  }, [refreshIndex]);
+
+  const handleRefresh = () => {
+    setLoading(true);
+    setRefreshIndex((prev) => prev + 1);
+  };
+
+  // Compute User Statistics from actual submissions
+  const totalSubmissions = submissions.length;
+  const verifiedCount = submissions.filter((s) => {
+    const meta = s.metadata as Record<string, unknown> | undefined;
+    const aiVerdict = (meta?.ai_assessment as { verdict?: string } | undefined)?.verdict;
+    return s.status === "approved" || aiVerdict === "verified_true" || aiVerdict === "verified";
+  }).length;
+
+  const falseCount = submissions.filter((s) => {
+    const meta = s.metadata as Record<string, unknown> | undefined;
+    const aiVerdict = (meta?.ai_assessment as { verdict?: string } | undefined)?.verdict;
+    return s.status === "rejected" || aiVerdict === "false";
+  }).length;
+
+  const pendingReviewCount = submissions.filter((s) =>
+    ["pending", "extracted", "in_review", "under_review", "pending_review", "needs_evidence"].includes(s.status)
+  ).length;
+
+  const getVerdictBadge = (verdict?: string | null) => {
+    switch (verdict?.toLowerCase()) {
+      case "verified":
+      case "verified_true":
+        return (
+          <Badge className="bg-success/15 text-success border-success/30 font-medium text-[11px]">
+            <CheckCircle2 className="h-3 w-3 mr-1" />
+            Verified
+          </Badge>
+        );
+      case "false":
+        return (
+          <Badge className="bg-danger/15 text-danger border-danger/30 font-medium text-[11px]">
+            <XCircle className="h-3 w-3 mr-1" />
+            False
+          </Badge>
+        );
+      case "misleading":
+        return (
+          <Badge className="bg-warning/15 text-warning border-warning/30 font-medium text-[11px]">
+            <AlertTriangle className="h-3 w-3 mr-1" />
+            Misleading
+          </Badge>
+        );
+      case "partially_true":
+        return (
+          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 font-medium text-[11px]">
+            <Scale className="h-3 w-3 mr-1" />
+            Partially True
+          </Badge>
+        );
+      case "unverified":
+      default:
+        return (
+          <Badge className="bg-muted text-muted-foreground border-border font-medium text-[11px]">
+            <Info className="h-3 w-3 mr-1" />
+            Unverified
+          </Badge>
+        );
+    }
+  };
+
+  const getReviewStatusBadge = (status: string) => {
+    switch (status) {
+      case "approved":
+        return (
+          <Badge className="bg-success/15 text-success border-success/30 font-semibold text-[11px]">
+            <ShieldCheck className="h-3 w-3 mr-1" />
+            Certified Approved
+          </Badge>
+        );
+      case "flagged":
+        return (
+          <Badge className="bg-warning/15 text-warning border-warning/30 font-semibold text-[11px]">
+            <ShieldAlert className="h-3 w-3 mr-1" />
+            Flagged for Escalation
+          </Badge>
+        );
+      case "needs_evidence":
+        return (
+          <Badge className="bg-blue-accent/15 text-blue-accent border-blue-accent/30 font-semibold text-[11px]">
+            <Search className="h-3 w-3 mr-1" />
+            Needs Additional Evidence
+          </Badge>
+        );
+      case "rejected":
+        return (
+          <Badge className="bg-danger/15 text-danger border-danger/30 font-semibold text-[11px]">
+            <XCircle className="h-3 w-3 mr-1" />
+            Rejected by Reviewer
+          </Badge>
+        );
+      case "under_review":
+        return (
+          <Badge className="bg-cyan-500/15 text-cyan-400 border-cyan-500/30 font-semibold text-[11px]">
+            <Clock className="h-3 w-3 mr-1 animate-pulse" />
+            Under Editorial Review
+          </Badge>
+        );
+      case "completed":
+        return (
+          <Badge className="bg-success/15 text-success border-success/30 font-semibold text-[11px]">
+            <CheckCircle2 className="h-3 w-3 mr-1" />
+            Analysis Completed
+          </Badge>
+        );
+      case "in_review":
+      case "pending_review":
+      default:
+        return (
+          <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 font-semibold text-[11px]">
+            <Clock className="h-3 w-3 mr-1" />
+            Pending Human Review
+          </Badge>
+        );
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Page header */}
+      {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-foreground">Personal Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Overview of election information verification activity
+            Track your election content submissions, preliminary AI syntheses, and certified review outcomes.
           </p>
         </div>
-        <Link href="/dashboard/submit">
-          <Button size="sm" className="gap-2">
-            <FilePlus2 className="h-4 w-4" />
-            Submit Content
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={loading}
+            onClick={handleRefresh}
+            className="gap-1.5 text-xs border-border/60"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-blue-accent" : ""}`} />
+            <span>Refresh</span>
           </Button>
-        </Link>
+
+          <Link href="/dashboard/submit">
+            <Button size="sm" className="gap-2 bg-blue-accent hover:bg-blue-accent/90 text-navy-950 font-semibold">
+              <FilePlus2 className="h-4 w-4" />
+              <span>Submit Content</span>
+            </Button>
+          </Link>
+        </div>
       </div>
+
+      {/* Admin Notice Callout (if logged in as admin) */}
+      {profile?.role === "admin" && (
+        <div className="rounded-xl border border-purple-500/40 bg-purple-500/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Shield className="h-6 w-6 text-purple-400 shrink-0" />
+            <div>
+              <p className="font-semibold text-purple-200 text-sm">Administrator Privileges Active</p>
+              <p className="text-xs text-purple-300/80">
+                You have access to the system-wide Review Queue, Editorial Adjudication Console, and Platform Analytics.
+              </p>
+            </div>
+          </div>
+          <Link href="/admin">
+            <Button size="sm" className="gap-1.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs shrink-0">
+              <span>Open Admin Console</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+        </div>
+      )}
 
       {/* Stats row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
-          title="Claims Analyzed"
-          value="12,847"
-          change="+12.5%"
+          title="My Submissions"
+          value={String(totalSubmissions)}
+          change="Real-time"
           trend="up"
           icon={Search}
         />
         <StatsCard
-          title="Verified True"
-          value="8,234"
-          change="+8.2%"
+          title="Verified Claims"
+          value={String(verifiedCount)}
+          change="Corroborated"
           trend="up"
-          icon={CheckCircle}
+          icon={CheckCircle2}
         />
         <StatsCard
-          title="Flagged False"
-          value="3,891"
-          change="-4.1%"
+          title="Flagged / False"
+          value={String(falseCount)}
+          change="Refuted"
           trend="down"
           icon={AlertTriangle}
         />
         <StatsCard
-          title="Sources Tracked"
-          value="1,429"
-          change="+23"
+          title="Awaiting Review"
+          value={String(pendingReviewCount)}
+          change="In Queue"
           trend="up"
-          icon={Globe}
+          icon={Clock}
         />
       </div>
 
-      {/* Content grid */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Recent claims table — spans 2 columns */}
-        <DashboardCard
-          title="Recent Claims"
-          description="Latest election claims being processed"
-          icon={BarChart3}
-          className="lg:col-span-2"
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border/50">
-                  <th className="text-left py-3 px-2 text-muted-foreground font-medium">
-                    Claim
-                  </th>
-                  <th className="text-left py-3 px-2 text-muted-foreground font-medium hidden sm:table-cell">
-                    Source
-                  </th>
-                  <th className="text-left py-3 px-2 text-muted-foreground font-medium">
-                    Status
-                  </th>
-                  <th className="text-right py-3 px-2 text-muted-foreground font-medium hidden md:table-cell">
-                    Confidence
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentClaims.map((claim) => (
-                  <tr
-                    key={claim.id}
-                    className="border-b border-border/30 last:border-0"
-                  >
-                    <td className="py-3 px-2">
-                      <p className="text-foreground line-clamp-1">
-                        {claim.claim}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5 sm:hidden">
-                        {claim.source}
-                      </p>
-                    </td>
-                    <td className="py-3 px-2 text-muted-foreground hidden sm:table-cell">
-                      {claim.source}
-                    </td>
-                    <td className="py-3 px-2">{getStatusBadge(claim.status)}</td>
-                    <td className="py-3 px-2 text-right hidden md:table-cell">
-                      <span
-                        className={
-                          claim.confidence >= 90
-                            ? "text-success"
-                            : claim.confidence >= 75
-                            ? "text-warning"
-                            : "text-muted-foreground"
-                        }
-                      >
-                        {claim.confidence}%
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Error Banner */}
+      {error && (
+        <div className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-xs text-danger flex items-start gap-3">
+          <XCircle className="h-5 w-5 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-sm">Dashboard Error</p>
+            <p className="text-danger/90">{error}</p>
           </div>
-        </DashboardCard>
+        </div>
+      )}
 
-        {/* Activity feed */}
-        <DashboardCard
-          title="Threat Alerts"
-          description="Recent misinformation campaigns"
-          icon={Shield}
-        >
-          <div className="space-y-4">
-            {[
-              {
-                title: "Coordinated Bot Network",
-                region: "Midwest US",
-                severity: "High",
-                time: "10 min ago",
-              },
-              {
-                title: "Deepfake Video Detected",
-                region: "Southeast US",
-                severity: "Critical",
-                time: "45 min ago",
-              },
-              {
-                title: "Misleading Polling Data",
-                region: "Northeast US",
-                severity: "Medium",
-                time: "2 hr ago",
-              },
-              {
-                title: "Fake Voter Registration Site",
-                region: "Southwest US",
-                severity: "Critical",
-                time: "3 hr ago",
-              },
-            ].map((alert, i) => (
-              <div
-                key={i}
-                className="flex items-start gap-3 p-3 rounded-lg bg-navy-800/50 border border-border/30"
-              >
+      {/* Submissions & Verification Lifecycle List */}
+      <DashboardCard
+        title="My Verification Reports"
+        description="Chronological record of submitted election content, algorithmic assessments, and certified human decisions"
+        icon={ShieldCheck}
+      >
+        {loading && submissions.length === 0 ? (
+          <div className="py-16 text-center space-y-3">
+            <RefreshCw className="h-8 w-8 animate-spin text-blue-accent mx-auto" />
+            <p className="text-xs text-muted-foreground">Loading your verification records…</p>
+          </div>
+        ) : submissions.length === 0 ? (
+          <div className="py-16 text-center space-y-3">
+            <Info className="h-8 w-8 text-muted-foreground mx-auto" />
+            <p className="text-sm font-semibold text-foreground">No Submissions Yet</p>
+            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+              Submit news article URLs, political speeches, or social media screenshots to extract claims and verify election facts.
+            </p>
+            <Link href="/dashboard/submit" className="inline-block pt-2">
+              <Button size="sm" className="gap-2 bg-blue-accent text-navy-950 font-semibold text-xs">
+                <FilePlus2 className="h-3.5 w-3.5" />
+                <span>Submit Your First Claim</span>
+              </Button>
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {submissions.map((sub) => {
+              const meta = sub.metadata as Record<string, unknown> | undefined;
+              const aiAssessment = meta?.ai_assessment as
+                | { verdict?: string; confidence_score?: number; summary?: string }
+                | undefined;
+
+              return (
                 <div
-                  className={`mt-0.5 h-2 w-2 rounded-full shrink-0 ${
-                    alert.severity === "Critical"
-                      ? "bg-danger"
-                      : alert.severity === "High"
-                      ? "bg-warning"
-                      : "bg-blue-accent"
-                  }`}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-foreground">
-                    {alert.title}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-muted-foreground">
-                      {alert.region}
-                    </span>
-                    <span className="text-xs text-muted-foreground">·</span>
-                    <span className="text-xs text-muted-foreground">
-                      {alert.time}
+                  key={sub.id}
+                  className="rounded-lg border border-border/50 bg-navy-900/60 hover:border-border/80 p-4 transition-colors space-y-3"
+                >
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] uppercase font-mono border-blue-accent/30 text-blue-glow">
+                          {sub.submission_type}
+                        </Badge>
+                        {getReviewStatusBadge(sub.status)}
+                        <span className="text-[11px] text-muted-foreground">
+                          {new Date(sub.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      <h3 className="text-sm sm:text-base font-semibold text-foreground truncate">
+                        {sub.title || sub.source_url || "Untitled Content"}
+                      </h3>
+
+                      {sub.source_url && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          Source: {sub.source_url}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-4 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-border/30">
+                      <div className="text-left sm:text-right space-y-1 text-xs">
+                        <div className="flex items-center sm:justify-end gap-1.5">
+                          <span className="text-muted-foreground text-[11px]">AI Verdict:</span>
+                          {getVerdictBadge(aiAssessment?.verdict)}
+                        </div>
+                        {typeof aiAssessment?.confidence_score === "number" && (
+                          <p className="text-[11px] text-muted-foreground font-mono">
+                            Confidence: <strong className="text-foreground">{aiAssessment.confidence_score}%</strong>
+                          </p>
+                        )}
+                      </div>
+
+                      <Link href={`/analyze/${sub.id}`}>
+                        <Button size="sm" variant="outline" className="gap-1.5 text-xs border-border/60 hover:border-blue-accent/60">
+                          <span>View Report</span>
+                          <ExternalLink className="h-3 w-3" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+
+                  {/* Clarification banner distinguishing AI vs Human certification */}
+                  <div className="pt-2 border-t border-border/30 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <Info className="h-3 w-3 text-blue-accent shrink-0" />
+                      <span>
+                        {sub.status === "approved"
+                          ? "Certified by human editorial reviewer."
+                          : "AI-generated preliminary assessment. Human review in progress."}
+                      </span>
+                    </div>
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      ID: {sub.id.slice(0, 8)}
                     </span>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-        </DashboardCard>
-      </div>
+        )}
+      </DashboardCard>
     </div>
   );
 }

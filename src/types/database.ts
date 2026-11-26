@@ -6,6 +6,12 @@ export type SubmissionStatus =
   | "pending"
   | "extracted"
   | "in_review"
+  | "pending_review"
+  | "under_review"
+  | "approved"
+  | "flagged"
+  | "needs_evidence"
+  | "rejected"
   | "completed"
   | "failed";
 
@@ -28,7 +34,16 @@ export type ReviewDecision =
   | "approved"
   | "flagged"
   | "rejected"
+  | "needs_evidence"
   | "needs_more_evidence";
+
+export type HumanReviewStatus =
+  | "pending_review"
+  | "under_review"
+  | "approved"
+  | "flagged"
+  | "needs_evidence"
+  | "rejected";
 
 export interface Profile {
   id: string;
@@ -123,6 +138,7 @@ export interface Claim {
   human_verdict?: string | null;
   human_explanation?: string | null;
   human_reviewer_id?: string | null;
+  human_reviewed_at?: string | null;
 }
 
 export interface Evidence {
@@ -162,6 +178,11 @@ export interface Report {
   overall_stats?: Record<string, unknown> | null;
   limitations?: string[] | null;
   ai_model?: string | null;
+  final_human_verdict?: string | null;
+  human_review_status?: HumanReviewStatus | null;
+  reviewer_notes?: string | null;
+  reviewed_at?: string | null;
+  reviewer_id?: string | null;
 }
 
 export interface Review {
@@ -172,6 +193,17 @@ export interface Review {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  report_id?: string | null;
+  previous_verdict?: string | null;
+  final_verdict?: string | null;
+  evidence_inspected?: boolean;
+  evidence_references?: Record<string, unknown>[] | null;
+  unresolved_issues?: string | null;
+  reviewer?: {
+    id: string;
+    email?: string;
+    full_name?: string | null;
+  };
 }
 
 export interface AuditLog {
