@@ -40,7 +40,7 @@ Electoral discourse is increasingly impacted by viral misinformation, manipulate
   * **Manual Text Submissions**: Validates election claims (20–20,000 characters) with prompt injection isolation boundaries.
   * **OCR Image Extraction**: Processes screenshots on-device with Tesseract.js; stores raw images in private Supabase Storage accessed via short-lived signed URLs.
 * **Intelligent Claim Extraction & Entity Recognition**
-  * Powered by server-side **Google Gemini 2.5 Flash**.
+  * Powered by server-side **Google Gemini 3.5 Flash Lite** (`gemini-3.5-flash-lite`).
   * Separates empirical, verifiable claims from subjective political opinions.
   * Identifies entities (Persons, Organizations, Locations, Public Policies) and generates objective search queries.
 * **Evidence Retrieval & Fact-Check Search Engine**
@@ -72,7 +72,7 @@ Electoral discourse is increasingly impacted by viral misinformation, manipulate
 | **Supabase PostgreSQL** | Relational database with strict Row Level Security (RLS) policies and triggers |
 | **Supabase Authentication** | User authentication with secure JWT cookies and session management |
 | **Supabase Storage** | Private object storage for submitted screenshots with signed URL access |
-| **Google Gemini API (@google/genai)** | Server-side LLM for content understanding, claim extraction, and verification synthesis |
+| **Google Gemini API (@google/genai)** | Server-side LLM for content understanding, claim extraction, and verification synthesis (`gemini-3.5-flash-lite`) |
 | **Google Fact Check Tools API** | Discovery of accredited third-party fact-check investigations |
 | **Tesseract.js** | Optical character recognition (OCR) engine for image-based claims |
 | **Zod 4** | Strict schema validation for incoming payloads, database models, and AI outputs |
@@ -104,7 +104,7 @@ flowchart TD
     end
 
     subgraph External ["External AI & Intelligence APIs"]
-        GEM["Google Gemini 2.5 Flash"]
+        GEM["Google Gemini 3.5 Flash Lite"]
         FC["Google Fact Check Tools API"]
     end
 
@@ -265,7 +265,7 @@ To deploy TruthLens AI to Vercel Hobby:
    * `NEXT_PUBLIC_SUPABASE_URL`
    * `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    * `GEMINI_API_KEY`
-   * `GEMINI_MODEL` (`gemini-2.5-flash`)
+   * `GEMINI_MODEL` (`gemini-3.5-flash-lite`)
    * `GOOGLE_FACTCHECK_API_KEY`
    * `NEXT_PUBLIC_APP_URL` (set to your Vercel domain, e.g. `https://truthlens-ai.vercel.app`)
 5. In Supabase Dashboard -> **Authentication** -> **URL Configuration**:

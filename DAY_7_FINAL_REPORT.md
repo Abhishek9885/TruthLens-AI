@@ -3,7 +3,7 @@
 * **Date**: November 27, 2026
 * **Application**: TruthLens AI (AI-Assisted Election Information Verification Platform)
 * **Status**: Complete & Verified Full-Stack Prototype
-* **Stack**: Next.js 16 (App Router), React 19, TypeScript 5, Tailwind CSS 4, Supabase PostgreSQL & Auth, Google Gemini 2.5 Flash, Google Fact Check Tools API, Tesseract.js, Zod 4
+* **Stack**: Next.js 16 (App Router), React 19, TypeScript 5, Tailwind CSS 4, Supabase PostgreSQL & Auth, Google Gemini 3.5 Flash Lite, Google Fact Check Tools API, Tesseract.js, Zod 4
 
 ---
 
@@ -30,7 +30,7 @@ Status Labels:
 | **Ingestion** | URL Submission (`/api/submissions`) | **PASS** | SSRF prevention: blocks private IPs, CIDR blocks, localhost, link-local, and bad redirects. |
 | **Ingestion** | Manual Text Submission | **PASS** | Validated (20 to 20,000 chars); isolated in prompt delimiters to resist injection. |
 | **Ingestion** | Image Upload & OCR (`/api/submissions/ocr`) | **PASS** | Binary magic-byte verification (JPEG, PNG, WebP), 5 MB limit, signed private URLs. |
-| **AI Extraction** | Content Understanding (`/api/analyze`) | **PASS** | Topic, language, summary, and election-relevance detection via Gemini 2.5 Flash. |
+| **AI Extraction** | Content Understanding (`/api/analyze`) | **PASS** | Topic, language, summary, and election-relevance detection via Gemini 3.5 Flash Lite. |
 | **AI Extraction** | Verifiable Claim Extraction | **PASS** | Distinguishes empirical claims from opinions; extracts entities and search queries. |
 | **Evidence Engine**| Fact Check API (`/api/evidence/retrieve`) | **PASS** | Google Fact Check Tools API Claim Search with language filtering and pagination. |
 | **Evidence Engine**| Evidence Deduplication & Classification | **PASS** | Normalizes canonical URLs, categorizes into supporting, refuting, or contextual. |

@@ -44,7 +44,7 @@ export class GeminiApiError extends Error {
 // Configuration
 // ============================================================================
 
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
 export const DEFAULT_REQUEST_TIMEOUT_MS = 35000;
 
 export function getGeminiModelName(): string {

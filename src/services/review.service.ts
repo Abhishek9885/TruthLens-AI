@@ -189,7 +189,7 @@ export async function getReviewWorkspaceData({
     verdict: aiVerdict,
     confidence: aiConfidence,
     explanation: aiExplanation,
-    modelUsed: report?.ai_model || (subMeta?.ai_model as string) || "gemini-2.5-flash",
+    modelUsed: report?.ai_model || (subMeta?.ai_model as string) || "gemini-3.5-flash-lite",
     assessedAt: (claims[0]?.verified_at as string) || report?.created_at || null,
     limitations: (report?.limitations as string[]) || [
       "AI-generated preliminary assessment.",
