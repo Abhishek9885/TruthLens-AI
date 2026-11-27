@@ -23,6 +23,8 @@ TruthLens AI is an AI-assisted election information verification and claim extra
 
 ## 1. Project Overview
 
+**Live Production URL**: [https://truthlens-ai-eta-ten.vercel.app](https://truthlens-ai-eta-ten.vercel.app)
+
 Electoral discourse is increasingly impacted by viral misinformation, manipulated imagery, and fabricated polling figures. **TruthLens AI** addresses this challenge through an open, explainable multi-stage pipeline:
 
 1. Ingests raw election statements from news URLs, user text, or screenshots.

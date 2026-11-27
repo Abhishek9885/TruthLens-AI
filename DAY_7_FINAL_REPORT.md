@@ -147,11 +147,13 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 ## 8. Deployment Status
 
-* **Target Platform**: Vercel Hobby
+* **Status**: **LIVE & DEPLOYED (PASS)**
+* **Live Production URL**: [https://truthlens-ai-eta-ten.vercel.app](https://truthlens-ai-eta-ten.vercel.app)
+* **Target Platform**: Vercel (Production)
 * **GitHub Repository**: [https://github.com/Abhishek9885/TruthLens-AI.git](https://github.com/Abhishek9885/TruthLens-AI.git)
 * **Branch**: `main`
-* **Vercel Readiness**: 100% prepared. Build command (`npm run build`) and output structure conform to Next.js 16 deployment requirements.
-* **Manual Step**: Connect repository in Vercel Dashboard, paste the 6 environment variables above, and add your Vercel domain to Supabase Auth Redirect URLs.
+* **Health Check**: HTTP 200 OK verified on live edge network.
+* **Production Environment Variables**: All configured and encrypted on Vercel (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `GOOGLE_FACTCHECK_API_KEY`, `NEXT_PUBLIC_APP_URL`).
 
 ---
 
